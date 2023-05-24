@@ -1,39 +1,43 @@
+require("dotenv").config();
 const parse_url = require('@warren-bank/url').parse
 const expressjs = require('./expressjs_utils')
 
 const regexs = {
   req_url: new RegExp('^(.*?)/([a-zA-Z0-9\\+/=%]+)(?:[\\._]([^/\\?#]*))?(?:[\\?#].*)?$'),
-  origin:  new RegExp('^(https?://[^/]+)(?:/.*)?$', 'i')
+  origin: new RegExp('^(https?://[^/]+)(?:/.*)?$', 'i')
 }
 
 // btoa
-const base64_encode = function(str) {
+const base64_encode = function (str) {
   return Buffer.from(str, 'binary').toString('base64')
 }
 
 // atob
-const base64_decode = function(str) {
+const base64_decode = function (str) {
   return Buffer.from(str, 'base64').toString('binary')
 }
 
-const parse_req_url = function(params, req) {
-  const {is_secure, host} = params
+const parse_req_url = function (params, req) {
+  const { is_secure, host } = params
 
-  const result = {redirected_base_url: '', url_type: '', url: '', referer_url: ''}
+  let useHttps = false;
+  if (process.env["USE_HTTPS"]) useHttps = true;
 
-  const matches = regexs.req_url.exec( expressjs.get_proxy_req_url(req) )
+  const result = { redirected_base_url: '', url_type: '', url: '', referer_url: '' }
+
+  const matches = regexs.req_url.exec(expressjs.get_proxy_req_url(req))
 
   if (matches) {
-    result.redirected_base_url = `${ is_secure ? 'https' : 'http' }://${host || req.headers.host}${expressjs.get_base_req_url(req) || matches[1] || ''}`
+    result.redirected_base_url = `${(is_secure || useHttps) ? 'https' : 'http'}://${host || req.headers.host}${expressjs.get_base_req_url(req) || matches[1] || ''}`
 
     if (matches[3])
       result.url_type = matches[3].toLowerCase().trim()
 
     let url, url_lc, index
 
-    url    = base64_decode( decodeURIComponent( matches[2] ) ).trim()
+    url = base64_decode(decodeURIComponent(matches[2])).trim()
     url_lc = url.toLowerCase()
-    index  = url_lc.indexOf('http')
+    index = url_lc.indexOf('http')
 
     if (index === 0) {
       index = url_lc.indexOf('|http')
@@ -50,9 +54,9 @@ const parse_req_url = function(params, req) {
   return result
 }
 
-const get_content_type = function(url_type) {
+const get_content_type = function (url_type) {
   let content_type
-  switch(url_type) {
+  switch (url_type) {
     case 'm3u8':
       content_type = 'application/x-mpegurl'
       break
@@ -71,21 +75,21 @@ const get_content_type = function(url_type) {
   return content_type
 }
 
-const add_CORS_headers = function(res) {
-  res.setHeader('Access-Control-Allow-Origin',      '*')
-  res.setHeader('Access-Control-Allow-Methods',     '*')
-  res.setHeader('Access-Control-Allow-Headers',     '*')
+const add_CORS_headers = function (res) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', '*')
+  res.setHeader('Access-Control-Allow-Headers', '*')
   res.setHeader('Access-Control-Allow-Credentials', 'true')
-  res.setHeader('Access-Control-Max-Age',           '86400')
+  res.setHeader('Access-Control-Max-Age', '86400')
 }
 
-const debug = function() {
-  let args        = [...arguments]
-  const params    = args.shift()
+const debug = function () {
+  let args = [...arguments]
+  const params = args.shift()
   const verbosity = args.shift()
   const append_LF = true
 
-  const {debug_level} = params
+  const { debug_level } = params
 
   if (append_LF) args.push("\n")
 
@@ -96,8 +100,8 @@ const debug = function() {
   }
 }
 
-const get_request_options = function(params, url, is_m3u8, referer_url) {
-  const {req_headers, req_options, hooks, http_proxy} = params
+const get_request_options = function (params, url, is_m3u8, referer_url) {
+  const { req_headers, req_options, hooks, http_proxy } = params
 
   const additional_req_options = (hooks && (hooks instanceof Object) && hooks.add_request_options && (typeof hooks.add_request_options === 'function'))
     ? hooks.add_request_options(url, is_m3u8)
@@ -112,17 +116,17 @@ const get_request_options = function(params, url, is_m3u8, referer_url) {
   const request_options = Object.assign(
     {},
     parse_url(url),
-    (req_options            || {}),
+    (req_options || {}),
     (additional_req_options || {})
   )
 
   request_options.headers = Object.assign(
     {},
-    ((           req_options &&            req_options.headers) ?            req_options.headers : {}),
+    ((req_options && req_options.headers) ? req_options.headers : {}),
     ((additional_req_options && additional_req_options.headers) ? additional_req_options.headers : {}),
-    (req_headers             || {}),
-    (additional_req_headers  || {}),
-    (referer_url ? {"referer": referer_url, "origin": referer_url.replace(regexs.origin, '$1')} : {})
+    (req_headers || {}),
+    (additional_req_headers || {}),
+    (referer_url ? { "referer": referer_url, "origin": referer_url.replace(regexs.origin, '$1') } : {})
   )
 
   // normalize
@@ -135,8 +139,8 @@ const get_request_options = function(params, url, is_m3u8, referer_url) {
   return request_options
 }
 
-const should_prefetch_url = function(params, url, url_type) {
-  const {hooks, cache_segments} = params
+const should_prefetch_url = function (params, url, url_type) {
+  const { hooks, cache_segments } = params
 
   let do_prefetch = !!url && !!cache_segments
 
